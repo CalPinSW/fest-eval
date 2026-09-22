@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #faf8f5;
+  --surface: #ffffff;
+  --surface-2: #f2eee8;
+  --border: #e4ded4;
+  --text: #1c1917;
+  --muted: #6b635a;
+  --accent: #d6336c;
+  --accent-strong: #b0224f;
+  --accent-soft: #fce4ec;
+  --on-accent: #ffffff;
+  --success: #2f7d4f;
+  --danger: #c0392b;
+  /* Priority ramp: cool (maybe) to hot (must see). */
+  --p1: #8fa3b8;
+  --p2: #5b8fb9;
+  --p3: #e0a02f;
+  --p4: #e8692f;
+  --p5: #d6336c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14110f;
+    --surface: #1d1916;
+    --surface-2: #27221e;
+    --border: #3a332d;
+    --text: #f4efe9;
+    --muted: #a89e93;
+    --accent: #f06292;
+    --accent-strong: #f48fb1;
+    --accent-soft: #3b1a27;
+    --on-accent: #1c0a11;
+    --success: #6fcf97;
+    --danger: #ff8a80;
+    --p1: #7d8fa3;
+    --p2: #6ea3cf;
+    --p3: #f0b545;
+    --p4: #f5854f;
+    --p5: #f06292;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-p1: var(--p1);
+  --color-p2: var(--p2);
+  --color-p3: var(--p3);
+  --color-p4: var(--p4);
+  --color-p5: var(--p5);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Component classes: @utility so they can build on each other and take variants. */
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent;
+}
+
+@utility btn-primary {
+  @apply btn bg-accent text-on-accent hover:bg-accent-strong;
+}
+
+@utility btn-secondary {
+  @apply btn border border-border bg-surface text-text hover:bg-surface-2;
+}
+
+@utility btn-ghost {
+  @apply btn text-muted hover:bg-surface-2 hover:text-text;
+}
+
+@utility btn-danger {
+  @apply btn border border-border bg-surface text-danger hover:bg-surface-2;
+}
+
+@utility input {
+  @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30;
+}
+
+@utility label {
+  @apply mb-1 block text-sm font-medium;
+}
+
+@utility card {
+  @apply rounded-2xl border border-border bg-surface p-4 sm:p-6;
+}
+
+@utility chip {
+  @apply inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-0.5 text-xs font-medium text-muted;
+}
+
+@utility page-title {
+  @apply text-2xl font-bold tracking-tight sm:text-3xl;
+}
+
+@utility link {
+  @apply font-medium text-accent underline-offset-2 hover:underline;
+}
