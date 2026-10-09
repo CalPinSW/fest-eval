@@ -112,12 +112,67 @@ describe("Clashfinder sync", () => {
     });
   });
 
-  it("refuses to import the same Clashfinder event twice", async () => {
+  it("returns the existing festival when the same Clashfinder event is imported again", async () => {
     const { event } = feed();
     const admin = adminClient();
     const id = `cf${uniq()}`;
-    const first = await createFestivalFromClashfinder(admin, id, event, null);
-    trackFestival(first.id);
-    await expect(createFestivalFromClashfinder(admin, id, event, null)).rejects.toThrow();
+    const [a, b] = await Promise.all([
+      createFestivalFromClashfinder(admin, id, event, null),
+      createFestivalFromClashfinder(admin, id, event, null),
+    ]);
+    trackFestival(a.id);
+    expect(b).toEqual(a);
+  });
+
+  it("imports festivals larger than one page of results, and re-syncs them without duplicates", async () => {
+    const suffix = uniq();
+    const stages = ["Pyramid", "Other", "West Holts"];
+    const big = {
+      name: `Huge Fest ${suffix}`,
+      timezone: "Europe/London",
+      locations: stages.map((stage, s) => ({
+        name: stage,
+        events: Array.from({ length: 420 }, (_, i) => {
+          const day = 24 + Math.floor(i / 140);
+          const minutes = (i % 140) * 5;
+          const start = `2026-06-${day} ${String(10 + Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+          const endMinutes = minutes + 4;
+          const end = `2026-06-${day} ${String(10 + Math.floor(endMinutes / 60)).padStart(2, "0")}:${String(endMinutes % 60).padStart(2, "0")}`;
+          return { name: `Act ${s}-${i} ${suffix}`, short: `a${s}x${i}`, start, end };
+        }),
+      })),
+    };
+    const event = parseClashfinderEvent(big);
+    expect(event.acts).toHaveLength(1260);
+
+    const { festival, summary } = await importFeed(event);
+    expect(summary.inserted).toBe(1260);
+    expect((await getLineup(anonClient(), festival.id)).performances).toHaveLength(1260);
+
+    const again = await applyClashfinderEvent(adminClient(), festival.id, event);
+    expect(again).toMatchObject({ inserted: 0, updated: 0, deleted: 0, unchanged: 1260 });
+  });
+
+  it("imports acts whose names are longer than the catalogue allows", async () => {
+    const suffix = uniq();
+    const longName = `Late night cabaret ${suffix} featuring ${"a very long list of performers, ".repeat(10)}`;
+    const event = parseClashfinderEvent({
+      timezone: "Europe/London",
+      locations: [{ name: "Theatre", events: [{ name: longName, short: "cab(1)", start: "2026-06-26 22:00", end: "2026-06-26 23:00" }] }],
+    });
+    const { festival, summary } = await importFeed(event);
+    expect(summary.inserted).toBe(1);
+    const [perf] = (await getLineup(anonClient(), festival.id)).performances;
+    expect(perf.artistName.length).toBeLessThanOrEqual(200);
+    expect(perf.artistName.startsWith(`Late night cabaret ${suffix}`)).toBe(true);
+  });
+
+  it("copes with two syncs of the same festival running at once", async () => {
+    const { event } = feed();
+    const admin = adminClient();
+    const festival = await createFestivalFromClashfinder(admin, `cf${uniq()}`, event, null);
+    trackFestival(festival.id);
+    await Promise.all([applyClashfinderEvent(admin, festival.id, event), applyClashfinderEvent(admin, festival.id, event)]);
+    expect((await getLineup(anonClient(), festival.id)).performances).toHaveLength(4);
   });
 });

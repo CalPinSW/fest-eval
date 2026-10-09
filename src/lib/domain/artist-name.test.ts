@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanDisplayName, isSameArtist, normalizeArtistName } from "./artist-name";
+import { cleanDisplayName, isSameArtist, MAX_ARTIST_NAME_LENGTH, normalizeArtistName } from "./artist-name";
 
 describe("normalizeArtistName", () => {
   it.each([
@@ -67,5 +67,17 @@ describe("isSameArtist", () => {
 describe("cleanDisplayName", () => {
   it("collapses whitespace", () => {
     expect(cleanDisplayName("  Idles \n live ")).toBe("Idles live");
+  });
+
+  it("keeps names up to the limit unchanged", () => {
+    const name = "a".repeat(MAX_ARTIST_NAME_LENGTH);
+    expect(cleanDisplayName(name)).toBe(name);
+  });
+
+  it("cuts over-long names with an ellipsis, within the limit", () => {
+    const cleaned = cleanDisplayName(`${"word ".repeat(60)}end`);
+    expect(cleaned.length).toBeLessThanOrEqual(MAX_ARTIST_NAME_LENGTH);
+    expect(cleaned.endsWith("…")).toBe(true);
+    expect(cleaned).not.toMatch(/\s…$/);
   });
 });

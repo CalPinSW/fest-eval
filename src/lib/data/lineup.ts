@@ -1,4 +1,5 @@
 import { cleanDisplayName, normalizeArtistName } from "@/lib/domain/artist-name";
+import type { PostgrestError } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import type { AppSupabaseClient, Tables } from "@/lib/supabase/types";
 import { slugify, type FestivalInput, type LineupChange } from "@/lib/validation";
@@ -35,21 +36,45 @@ export async function getFestivalBySlug(client: AppSupabaseClient, slug: string)
   return check(await client.from("festivals").select("*").eq("slug", slug).maybeSingle(), "load the festival");
 }
 
+/** PostgREST returns at most this many rows per request. */
+const PAGE_SIZE = 1000;
+
+/** Fetch every row of a query, a page at a time. The query must have a stable order. */
+export async function fetchAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>,
+  action: string,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const result = await page(from, from + PAGE_SIZE - 1);
+    if (result.error) check(result, action);
+    const batch = result.data ?? [];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return rows;
+  }
+}
+
 export async function getLineup(client: AppSupabaseClient, festivalId: string): Promise<Lineup> {
   const [stages, performances] = await Promise.all([
     client.from("stages").select("id, name, sort_order").eq("festival_id", festivalId).order("sort_order"),
-    client
-      .from("performances")
-      .select(
-        "id, artist_id, stage_id, starts_at, ends_at, source, external_key, locally_modified, artists(name, normalized_name), stages(name)",
-      )
-      .eq("festival_id", festivalId)
-      .order("starts_at", { ascending: true, nullsFirst: false }),
+    fetchAllRows(
+      (from, to) =>
+        client
+          .from("performances")
+          .select(
+            "id, artist_id, stage_id, starts_at, ends_at, source, external_key, locally_modified, artists(name, normalized_name), stages(name)",
+          )
+          .eq("festival_id", festivalId)
+          .order("starts_at", { ascending: true, nullsFirst: false })
+          .order("id")
+          .range(from, to),
+      "load the lineup",
+    ),
   ]);
 
   return {
     stages: check(stages, "load stages").map((s) => ({ id: s.id, name: s.name, sortOrder: s.sort_order })),
-    performances: check(performances, "load the lineup").map((p) => ({
+    performances: performances.map((p) => ({
       id: p.id,
       artistId: p.artist_id,
       artistName: p.artists?.name ?? "Unknown",
@@ -98,6 +123,65 @@ export async function ensureArtist(client: AppSupabaseClient, name: string): Pro
     return raced.id;
   }
   return check(inserted, "add the artist").id;
+}
+
+/** Split values into groups whose combined length stays under `maxChars` (keeps request URLs short). */
+function chunkByLength(values: string[], maxChars: number): string[][] {
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let size = 0;
+  for (const value of values) {
+    const cost = encodeURIComponent(value).length + 3;
+    if (current.length > 0 && size + cost > maxChars) {
+      chunks.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(value);
+    size += cost;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * Find or create many catalogue artists at once. Returns a map from
+ * normalised name to artist id. Used by imports, where one query per artist
+ * would be far too slow for a festival with thousands of acts.
+ */
+export async function ensureArtists(client: AppSupabaseClient, names: string[]): Promise<Map<string, string>> {
+  const wanted = new Map<string, string>();
+  for (const name of names) {
+    const display = cleanDisplayName(name);
+    const normalized = normalizeArtistName(display);
+    if (normalized && !wanted.has(normalized)) wanted.set(normalized, display);
+  }
+
+  const ids = new Map<string, string>();
+  const lookUp = async (keys: string[]) => {
+    for (const chunk of chunkByLength(keys, 4000)) {
+      const rows = check(
+        await client.from("artists").select("id, normalized_name").in("normalized_name", chunk),
+        "look up artists",
+      );
+      for (const row of rows) ids.set(row.normalized_name, row.id);
+    }
+  };
+
+  await lookUp([...wanted.keys()]);
+  const missing = [...wanted].filter(([normalized]) => !ids.has(normalized));
+  for (let i = 0; i < missing.length; i += 500) {
+    // Ignore conflicts: a concurrent import may have created some already.
+    check(
+      await client.from("artists").upsert(
+        missing.slice(i, i + 500).map(([normalized_name, name]) => ({ name, normalized_name })),
+        { onConflict: "normalized_name", ignoreDuplicates: true },
+      ),
+      "add artists",
+    );
+  }
+  if (missing.length > 0) await lookUp(missing.map(([normalized]) => normalized));
+  return ids;
 }
 
 /** Find or create a stage by name. `null` name means no stage. */
