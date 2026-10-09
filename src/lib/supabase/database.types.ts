@@ -552,13 +552,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      are_friends: { Args: { a: string; b: string }; Returns: boolean }
-      attends: { Args: { fid: string; uid: string }; Returns: boolean }
       can_edit_festival: {
         Args: { fid: string; uid: string }
         Returns: boolean
       }
-      is_moderator: { Args: { uid: string }; Returns: boolean }
       set_user_role: {
         Args: {
           new_role: Database["public"]["Enums"]["app_role"]
