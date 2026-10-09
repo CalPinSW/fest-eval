@@ -4,6 +4,7 @@ import { describePerformance } from "@/components/performance-summary";
 import { SubmitButton } from "@/components/submit-button";
 import { requireUser } from "@/lib/auth";
 import { loadFestivalView } from "@/lib/data/festival-view";
+import { getPerformancesByIds } from "@/lib/data/lineup-queries";
 import type { LineupPerformance } from "@/lib/data/lineup";
 import { listProposals, type Proposal } from "@/lib/data/proposals";
 import { createClient } from "@/lib/supabase/server";
@@ -45,9 +46,12 @@ const STATUS_CHIP = { pending: "chip", approved: "chip bg-success/15 text-succes
 export default async function ProposalsPage(props: PageProps<"/festivals/[slug]/proposals">) {
   const { slug } = await props.params;
   await requireUser(`/festivals/${slug}/proposals`);
-  const { festival, lineup, canEdit } = await loadFestivalView(slug);
-  const proposals = await listProposals(await createClient(), festival.id);
-  const performances = new Map(lineup.performances.map((p) => [p.id, p]));
+  const { festival, canEdit } = await loadFestivalView(slug);
+  const supabase = await createClient();
+  const proposals = await listProposals(supabase, festival.id);
+  // Only the performances these suggestions refer to.
+  const referenced = proposals.flatMap((p) => (p.change && "performanceId" in p.change ? [p.change.performanceId] : []));
+  const performances = await getPerformancesByIds(supabase, festival.id, [...new Set(referenced)]);
   const pending = proposals.filter((p) => p.status === "pending");
   const reviewed = proposals.filter((p) => p.status !== "pending").slice(0, 30);
 

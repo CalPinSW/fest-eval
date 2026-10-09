@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createFestivalWithLineup, createUser, signIn, uniq } from "./fixtures";
+import { createFestivalWithLineup, createUser, pick, signIn, uniq } from "./fixtures";
 
 test("friends going to the same festival see each other's picks", async ({ browser }) => {
   const [alice, bob] = await Promise.all([createUser("alice"), createUser("bob")]);
@@ -31,15 +31,10 @@ test("friends going to the same festival see each other's picks", async ({ brows
     await page.getByRole("button", { name: "I'm going" }).click();
     await expect(page.getByRole("button", { name: /Going · leave/ })).toBeVisible();
   }
-  await bobPage
-    .getByRole("radiogroup", { name: `How much do you want to see ${artist}?` })
-    .getByRole("radio", { name: "Must see" })
-    .click();
+  await pick(bobPage, `${artist}`, "Must see");
   await expect(
     bobPage.getByRole("radiogroup", { name: `How much do you want to see ${artist}?` }).getByRole("radio", { name: "Must see" }),
   ).toHaveAttribute("aria-checked", "true");
-
-  await expect(bobPage.locator('[role="radiogroup"][aria-busy="true"]')).toHaveCount(0);
   await alicePage.reload();
   await expect(alicePage.getByText(`1 friend going:`)).toBeVisible();
   await expect(alicePage.getByLabel(`Friends: ${bob.username} (Must see)`)).toBeVisible();
@@ -63,11 +58,10 @@ test("a stranger cannot see anyone's picks", async ({ page }) => {
 
   await signIn(page, picker, `/festivals/${festival.slug}`);
   await page.getByRole("button", { name: "I'm going" }).click();
-  await page.getByRole("radiogroup", { name: `How much do you want to see ${artist}?` }).getByRole("radio", { name: "Must see" }).click();
+  await pick(page, `${artist}`, "Must see");
   await expect(
     page.getByRole("radiogroup", { name: `How much do you want to see ${artist}?` }).getByRole("radio", { name: "Must see" }),
   ).toHaveAttribute("aria-checked", "true");
-  await expect(page.locator('[role="radiogroup"][aria-busy="true"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 

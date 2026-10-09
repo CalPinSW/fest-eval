@@ -90,17 +90,6 @@ export async function getLineup(client: AppSupabaseClient, festivalId: string): 
   };
 }
 
-/** Distinct artists on a lineup, alphabetical. */
-export function lineupArtists(lineup: Lineup) {
-  const byId = new Map<string, { id: string; name: string; normalizedName: string; performances: LineupPerformance[] }>();
-  for (const p of lineup.performances) {
-    const entry = byId.get(p.artistId) ?? { id: p.artistId, name: p.artistName, normalizedName: p.normalizedName, performances: [] };
-    entry.performances.push(p);
-    byId.set(p.artistId, entry);
-  }
-  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
-}
-
 /** Find or create the catalogue artist for a display name. */
 export async function ensureArtist(client: AppSupabaseClient, name: string): Promise<string> {
   const display = cleanDisplayName(name);

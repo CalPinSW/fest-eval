@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { TimetableGrid, type PlanStatus } from "@/components/timetable-grid";
 import { loadFestivalView } from "@/lib/data/festival-view";
+import { getDayPerformances, getFestivalDays, getStages, getUnscheduledArtistNames } from "@/lib/data/lineup-queries";
 import { planDay, type PickedPerformance } from "@/lib/domain/planner";
 import { PRIORITY_LABELS } from "@/lib/domain/priority";
-import { festivalDayOf, festivalDays, formatDayLabel, formatLocalTime } from "@/lib/domain/time";
-import { layoutTimetable } from "@/lib/domain/timetable";
-import type { ScheduledPerformance } from "@/lib/domain/types";
+import { festivalDayOf, formatDayLabel, formatLocalTime } from "@/lib/domain/time";
+import { layoutTimetable, pageStages, performancesOnStagePage } from "@/lib/domain/timetable";
+import { createClient } from "@/lib/supabase/server";
 
 const VIEWS = [
   { value: "all", label: "All sets" },
@@ -14,21 +15,24 @@ const VIEWS = [
 ] as const;
 type View = (typeof VIEWS)[number]["value"];
 
+/** Stages per screen in the "All sets" view; big festivals have 100+. */
+const STAGES_PER_PAGE = 12;
+
 export default async function TimetablePage(props: PageProps<"/festivals/[slug]/timetable">) {
   const { slug } = await props.params;
   const search = await props.searchParams;
-  const { festival, lineup, myPicks, friendPicks, user } = await loadFestivalView(slug);
+  const { festival, myPicks, friendPicks, user } = await loadFestivalView(slug);
   const tz = festival.timezone;
   const boundary = festival.day_boundary_hour;
+  const supabase = await createClient();
 
-  const scheduled: ScheduledPerformance[] = lineup.performances.flatMap((p) =>
-    p.startsAt && p.endsAt
-      ? [{ id: p.id, artistId: p.artistId, artistName: p.artistName, stageId: p.stageId, stageName: p.stageName, startsAt: p.startsAt, endsAt: p.endsAt }]
-      : [],
-  );
-  const unscheduled = lineup.performances.filter((p) => !p.startsAt || !p.endsAt);
+  // Only the selected day is loaded: big festivals have thousands of sets.
+  const [days, unscheduled] = await Promise.all([
+    getFestivalDays(supabase, festival.id),
+    getUnscheduledArtistNames(supabase, festival.id),
+  ]);
 
-  if (scheduled.length === 0) {
+  if (days.length === 0) {
     return (
       <div className="card text-center">
         <p className="font-medium">Set times haven&apos;t been announced yet.</p>
@@ -40,14 +44,13 @@ export default async function TimetablePage(props: PageProps<"/festivals/[slug]/
     );
   }
 
-  const days = festivalDays(scheduled.map((p) => p.startsAt), tz, boundary);
   const today = festivalDayOf(new Date(), tz, boundary);
   const day = typeof search.day === "string" && days.includes(search.day) ? search.day : days.includes(today) ? today : days[0];
   const requestedView = VIEWS.some((v) => v.value === search.view) ? (search.view as View) : "all";
   const view: View = !user && requestedView !== "all" ? "all" : requestedView;
   const changeover = Math.min(Math.max(Number(search.changeover) || 0, 0), 30);
 
-  const onDay = scheduled.filter((p) => festivalDayOf(p.startsAt, tz, boundary) === day);
+  const [onDay, stages] = await Promise.all([getDayPerformances(supabase, festival, day), getStages(supabase, festival.id)]);
   const picked: PickedPerformance[] = onDay.flatMap((p) => {
     const priority = myPicks.get(p.artistId);
     return priority ? [{ ...p, priority }] : [];
@@ -66,11 +69,16 @@ export default async function TimetablePage(props: PageProps<"/festivals/[slug]/
       : view === "plan"
         ? picked
         : onDay.filter((p) => myPicks.has(p.artistId) || friendPicks.has(p.artistId));
-  const layout = layoutTimetable(shown, lineup.stages);
+  // Picks and plan views are small; the full day is paged by stage.
+  const stagePage = view === "all" ? pageStages(shown, stages, Number(search.stages) || 1, STAGES_PER_PAGE) : null;
+  const visible = stagePage ? performancesOnStagePage(shown, stages, stagePage) : shown;
+  const layout = layoutTimetable(visible, stages);
 
   const href = (params: Record<string, string | number>) => {
     const q = new URLSearchParams({ day, view, ...(changeover ? { changeover: String(changeover) } : {}) });
     for (const [k, v] of Object.entries(params)) q.set(k, String(v));
+    // Changing day or view starts from the first stages again.
+    if (!("stages" in params)) q.delete("stages");
     return `?${q}`;
   };
 
@@ -104,6 +112,26 @@ export default async function TimetablePage(props: PageProps<"/festivals/[slug]/
             </Link>
           ))}
         </div>
+      )}
+
+      {stagePage && stagePage.pages > 1 && (
+        <nav aria-label="Stages" className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <p className="text-muted">
+            Stages {stagePage.firstIndex}–{stagePage.lastIndex} of {stagePage.totalStages}
+          </p>
+          <div className="flex gap-2">
+            {stagePage.page > 1 ? (
+              <Link href={href({ stages: stagePage.page - 1 })} className="btn-secondary px-3 py-1.5">Previous stages</Link>
+            ) : (
+              <span className="btn-secondary px-3 py-1.5 opacity-50" aria-disabled>Previous stages</span>
+            )}
+            {stagePage.page < stagePage.pages ? (
+              <Link href={href({ stages: stagePage.page + 1 })} className="btn-secondary px-3 py-1.5">More stages</Link>
+            ) : (
+              <span className="btn-secondary px-3 py-1.5 opacity-50" aria-disabled>More stages</span>
+            )}
+          </div>
+        </nav>
       )}
 
       {layout ? (
@@ -146,7 +174,8 @@ export default async function TimetablePage(props: PageProps<"/festivals/[slug]/
       {unscheduled.length > 0 && (
         <p className="text-sm text-muted">
           <span className="font-medium text-text">Times not announced:</span>{" "}
-          {[...new Set(unscheduled.map((p) => p.artistName))].join(", ")}
+          {unscheduled.slice(0, 40).join(", ")}
+          {unscheduled.length > 40 && ` and ${unscheduled.length - 40} more`}
         </p>
       )}
     </div>

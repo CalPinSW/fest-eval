@@ -7,9 +7,9 @@ import {
   ensureArtist,
   getFestivalBySlug,
   getLineup,
-  lineupArtists,
   listFestivals,
 } from "@/lib/data/lineup";
+import { getLineupPage } from "@/lib/data/lineup-queries";
 import { adminClient, anonClient, createFestival, createUser, trackFestival, uniq } from "./helpers";
 
 describe("festivals", () => {
@@ -164,7 +164,7 @@ describe("artist catalogue", () => {
     const name = `Twice ${uniq()}`;
     await applyLineupChange(owner.client, festival.id, { kind: "add_performance", artistName: name });
     await applyLineupChange(owner.client, festival.id, { kind: "add_performance", artistName: `${name} (live)` });
-    const artists = lineupArtists(await getLineup(anonClient(), festival.id));
+    const { artists } = await getLineupPage(anonClient(), festival.id);
     expect(artists).toHaveLength(1);
     expect(artists[0].performances).toHaveLength(2);
   });

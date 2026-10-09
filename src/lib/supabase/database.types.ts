@@ -556,6 +556,37 @@ export type Database = {
         Args: { fid: string; uid: string }
         Returns: boolean
       }
+      festival_days: {
+        Args: { fid: string }
+        Returns: {
+          day: string
+        }[]
+      }
+      festival_liked_artists: {
+        Args: { fid: string }
+        Returns: {
+          artist_id: string
+          artist_name: string
+          normalized_name: string
+          providers: Database["public"]["Enums"]["music_provider"][]
+        }[]
+      }
+      festival_lineup_page: {
+        Args: {
+          fid: string
+          only_artist_ids?: string[]
+          page_limit?: number
+          page_offset?: number
+          search?: string
+        }
+        Returns: {
+          artist_id: string
+          artist_name: string
+          normalized_name: string
+          performances: Json
+          total_count: number
+        }[]
+      }
       set_user_role: {
         Args: {
           new_role: Database["public"]["Enums"]["app_role"]
