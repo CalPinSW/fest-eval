@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createFestivalWithLineup, createUser, signIn, uniq } from "./fixtures";
+import { createFestivalWithLineup, createUser, pick, signIn, uniq } from "./fixtures";
 
 test("creates a festival, builds a lineup, picks artists and plans the day", async ({ page }) => {
   const user = await createUser();
@@ -38,15 +38,14 @@ test("creates a festival, builds a lineup, picks artists and plans the day", asy
   await page.getByRole("button", { name: "I'm going" }).click();
   await expect(page.getByRole("button", { name: /Going · leave/ })).toBeVisible();
 
-  await page.getByRole("radiogroup", { name: `How much do you want to see Headliner ${suffix}?` }).getByRole("radio", { name: "Must see" }).click();
-  await page.getByRole("radiogroup", { name: `How much do you want to see Clasher ${suffix}?` }).getByRole("radio", { name: "Want to see" }).click();
-  await page.getByRole("radiogroup", { name: `How much do you want to see Opener ${suffix}?` }).getByRole("radio", { name: "Maybe" }).click();
+  await pick(page, `Headliner ${suffix}`, "Must see");
+  await pick(page, `Clasher ${suffix}`, "Want to see");
+  await pick(page, `Opener ${suffix}`, "Maybe");
   await expect(
     page.getByRole("radiogroup", { name: `How much do you want to see Headliner ${suffix}?` }).getByRole("radio", { name: "Must see" }),
   ).toHaveAttribute("aria-checked", "true");
 
   // Picks persist across reloads once saved.
-  await expect(page.locator('[role="radiogroup"][aria-busy="true"]')).toHaveCount(0);
   await page.reload();
   await expect(
     page.getByRole("radiogroup", { name: `How much do you want to see Clasher ${suffix}?` }).getByRole("radio", { name: "Want to see" }),

@@ -1,9 +1,16 @@
 "use client";
 
-import { useActionState, useOptimistic, useTransition } from "react";
+import { useActionState, useOptimistic, useSyncExternalStore, useTransition } from "react";
 import { setPickAction } from "@/app/actions/picks";
 import type { ActionState } from "@/app/actions/result";
 import { PRIORITIES, PRIORITY_LABELS, type Priority } from "@/lib/domain/priority";
+
+const noopSubscribe = () => () => {};
+
+/** False during server render and hydration, true once event handlers are attached. */
+function useHydrated() {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
+}
 
 export const PRIORITY_BG: Record<Priority, string> = {
   1: "bg-p1",
@@ -35,6 +42,8 @@ export function PriorityPicker({
   const [optimistic, setOptimistic] = useOptimistic(priority);
   const [state, formAction, saving] = useActionState(action, {});
   const [, startTransition] = useTransition();
+  // Until hydration the buttons have no click handler, so a tap would be lost.
+  const hydrated = useHydrated();
 
   function choose(level: Priority) {
     const next = optimistic === level ? null : level;
@@ -68,6 +77,7 @@ export function PriorityPicker({
               aria-label={PRIORITY_LABELS[level]}
               title={optimistic === level ? `${PRIORITY_LABELS[level]} (click to clear)` : PRIORITY_LABELS[level]}
               onClick={() => choose(level)}
+              disabled={!hydrated}
               className={`h-7 w-7 rounded-full border text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
                 active && optimistic ? `${PRIORITY_BG[optimistic]} border-transparent text-white` : "border-border bg-surface text-muted hover:bg-surface-2"
               }`}

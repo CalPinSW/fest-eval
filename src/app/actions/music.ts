@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { UserFacingError } from "@/lib/data/errors";
-import { getFestivalBySlug, getLineup, lineupArtists } from "@/lib/data/lineup";
+import { getFestivalBySlug } from "@/lib/data/lineup";
+import { getLineupArtistsByIds } from "@/lib/data/lineup-queries";
 import { disconnect, exportFestivalPlaylist, getProviderClient, syncLikedArtists } from "@/lib/data/music";
 import { getVisiblePicks } from "@/lib/data/social";
 import { musicConfigFromEnv } from "@/lib/music/config";
@@ -48,10 +49,16 @@ export async function exportPlaylistAction(_: ActionState, form: FormData): Prom
     const festival = await getFestivalBySlug(supabase, slug);
     if (!festival) throw new UserFacingError("Festival not found.");
 
-    const [lineup, picks] = await Promise.all([getLineup(supabase, festival.id), getVisiblePicks(supabase, festival.id)]);
-    const artists = new Map(lineupArtists(lineup).map((a) => [a.id, a]));
+    const picks = (await getVisiblePicks(supabase, festival.id)).filter((p) => p.userId === user.id);
+    // Only the picked artists, not the whole lineup.
+    const pickedArtists = await getLineupArtistsByIds(
+      supabase,
+      festival.id,
+      picks.map((p) => p.artistId),
+    );
+    const artists = new Map(pickedArtists.map((a) => [a.id, a]));
     const mine = picks
-      .filter((p) => p.userId === user.id && artists.has(p.artistId))
+      .filter((p) => artists.has(p.artistId))
       .map((p) => {
         const artist = artists.get(p.artistId)!;
         const times = artist.performances.flatMap((perf) => (perf.startsAt ? [perf.startsAt.getTime()] : []));

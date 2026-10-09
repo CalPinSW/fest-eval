@@ -108,3 +108,57 @@ function placeItems<P extends ScheduledPerformance>(performances: P[], gridStart
   closeCluster();
   return items;
 }
+
+export interface StagePage {
+  /** Stages to show on this page, in display order. */
+  stageIds: Set<string | null>;
+  page: number;
+  pages: number;
+  /** Stages (including "Stage TBA") that have sets in `performances`. */
+  totalStages: number;
+  firstIndex: number;
+  lastIndex: number;
+}
+
+/**
+ * Split the stages that have sets into pages of `pageSize`, so a festival with
+ * a hundred stages shows a readable (and light) slice of the grid at a time.
+ * Sets with no known stage form a trailing "Stage TBA" group, as in the grid.
+ */
+export function pageStages(
+  performances: ScheduledPerformance[],
+  stages: Stage[],
+  page: number,
+  pageSize: number,
+): StagePage {
+  const known = new Set(stages.map((s) => s.id));
+  const used = new Set(performances.map((p) => (p.stageId && known.has(p.stageId) ? p.stageId : null)));
+  const ordered: (string | null)[] = [...stages]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    .map((s) => s.id)
+    .filter((id) => used.has(id));
+  if (used.has(null)) ordered.push(null);
+
+  const pages = Math.max(1, Math.ceil(ordered.length / pageSize));
+  const current = Math.min(Math.max(1, Math.floor(page) || 1), pages);
+  const start = (current - 1) * pageSize;
+  const slice = ordered.slice(start, start + pageSize);
+  return {
+    stageIds: new Set(slice),
+    page: current,
+    pages,
+    totalStages: ordered.length,
+    firstIndex: slice.length ? start + 1 : 0,
+    lastIndex: start + slice.length,
+  };
+}
+
+/** The performances on the given stage page. */
+export function performancesOnStagePage<P extends ScheduledPerformance>(
+  performances: P[],
+  stages: Stage[],
+  stagePage: StagePage,
+): P[] {
+  const known = new Set(stages.map((s) => s.id));
+  return performances.filter((p) => stagePage.stageIds.has(p.stageId && known.has(p.stageId) ? p.stageId : null));
+}

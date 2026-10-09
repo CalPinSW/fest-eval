@@ -58,10 +58,15 @@ export function TimetableGrid({
             <h3 className="sticky top-0 flex h-10 items-center border-b border-border px-2 text-xs font-semibold uppercase tracking-wide">
               <span className="truncate">{column.stageName}</span>
             </h3>
-            <div className="relative" style={{ height }}>
-              {layout.hours.map((hour, i) => (
-                <div key={hour.toISOString()} className="absolute inset-x-0 border-t border-dashed border-border/70" style={{ top: i * 60 * PX_PER_MINUTE }} />
-              ))}
+            {/* Hour lines are a repeating background rather than one element per hour. */}
+            <div
+              className="relative"
+              style={{
+                height,
+                backgroundImage: "linear-gradient(to bottom, var(--border) 1px, transparent 1px)",
+                backgroundSize: `100% ${60 * PX_PER_MINUTE}px`,
+              }}
+            >
               {column.items.map(({ performance: p, offsetMinutes, durationMinutes, lane, laneCount }) => {
                 const mine = myPicks.get(p.artistId);
                 const friends = friendPicks.get(p.artistId) ?? [];
