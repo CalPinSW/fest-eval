@@ -135,7 +135,14 @@ export default async function TimetablePage(props: PageProps<"/festivals/[slug]/
       )}
 
       {layout ? (
-        <TimetableGrid layout={layout} timeZone={tz} myPicks={myPicks} friendPicks={friendPicks} planStatus={planStatus} />
+        <TimetableGrid
+          layout={layout}
+          timeZone={tz}
+          myPicks={myPicks}
+          friendPicks={friendPicks}
+          planStatus={planStatus}
+          now={day === today ? new Date() : undefined}
+        />
       ) : (
         <p className="card text-center text-muted">
           {view === "all" ? "Nothing on this day." : "You haven't picked anyone playing this day."}

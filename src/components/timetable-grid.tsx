@@ -3,8 +3,10 @@ import { formatLocalTime } from "@/lib/domain/time";
 import type { TimetableLayout } from "@/lib/domain/timetable";
 import type { ScheduledPerformance } from "@/lib/domain/types";
 import { FriendBadges } from "./friend-badges";
+import { TimetableViewport } from "./timetable-viewport";
 
 const PX_PER_MINUTE = 1.6;
+const HEADER_PX = 40;
 
 const TINT: Record<Priority, string> = {
   1: "border-l-p1 bg-p1/15",
@@ -22,6 +24,7 @@ export function TimetableGrid({
   myPicks,
   friendPicks,
   planStatus,
+  now,
 }: {
   layout: TimetableLayout<ScheduledPerformance>;
   timeZone: string;
@@ -29,15 +32,28 @@ export function TimetableGrid({
   friendPicks: Map<string, { userId: string; username: string; priority: Priority }[]>;
   /** Present in plan mode: performance id -> whether the plan keeps it. */
   planStatus?: Map<string, PlanStatus>;
+  /** The current time; a "now" line is drawn if it falls inside the grid. */
+  now?: Date;
 }) {
   const height = layout.totalMinutes * PX_PER_MINUTE;
+  const nowMinutes = now ? (now.getTime() - layout.start.getTime()) / 60_000 : null;
+  const nowTop = nowMinutes !== null && nowMinutes >= 0 && nowMinutes <= layout.totalMinutes ? nowMinutes * PX_PER_MINUTE : undefined;
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border bg-surface" role="region" aria-label="Timetable" tabIndex={0}>
-      <div className="flex min-w-max">
-        {/* Time axis */}
+    <TimetableViewport initialScrollTop={nowTop}>
+      <div className="relative flex min-w-max">
+        {nowTop !== undefined && (
+          <div
+            aria-hidden
+            data-testid="now-line"
+            className="pointer-events-none absolute inset-x-0 z-[5] border-t-2 border-accent"
+            style={{ top: HEADER_PX + nowTop }}
+          />
+        )}
+        {/* Time axis: pinned left while scrolling sideways. */}
         <div className="sticky left-0 z-20 w-14 shrink-0 border-r border-border bg-surface">
-          <div className="h-10 border-b border-border" />
+          {/* Corner cell: pinned both ways, above the stage names. */}
+          <div className="sticky top-0 z-30 h-10 border-b border-border bg-surface" />
           <div className="relative" style={{ height }}>
             {layout.hours.map((hour, i) => (
               <span
@@ -55,7 +71,8 @@ export function TimetableGrid({
 
         {layout.columns.map((column) => (
           <section key={column.stageId ?? "tba"} className="w-40 shrink-0 border-r border-border last:border-r-0 sm:w-48" aria-label={column.stageName}>
-            <h3 className="sticky top-0 flex h-10 items-center border-b border-border px-2 text-xs font-semibold uppercase tracking-wide">
+            {/* Stage names stay pinned to the top while scrolling down. */}
+            <h3 className="sticky top-0 z-10 flex h-10 items-center border-b border-border bg-surface px-2 text-xs font-semibold uppercase tracking-wide">
               <span className="truncate">{column.stageName}</span>
             </h3>
             {/* Hour lines are a repeating background rather than one element per hour. */}
@@ -115,6 +132,6 @@ export function TimetableGrid({
           </section>
         ))}
       </div>
-    </div>
+    </TimetableViewport>
   );
 }
