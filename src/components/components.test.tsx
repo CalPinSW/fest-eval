@@ -97,6 +97,30 @@ describe("TimetableGrid", () => {
     expect(within(grid).getByRole("article", { name: "Clasher, 21:30–22:30, 1 friend want to go" })).toBeInTheDocument();
   });
 
+  it("draws a now line only when the current time is inside the grid", () => {
+    const props = { layout, timeZone: "Europe/London", myPicks: new Map(), friendPicks: new Map() };
+    const { rerender } = render(<TimetableGrid {...props} now={new Date("2027-07-02T20:45:00Z")} />);
+    // 45 minutes after the 20:00 grid start, below the 40px stage header.
+    expect(screen.getByTestId("now-line")).toHaveStyle({ top: `${40 + 45 * 1.6}px` });
+    rerender(<TimetableGrid {...props} now={new Date("2027-07-03T09:00:00Z")} />);
+    expect(screen.queryByTestId("now-line")).not.toBeInTheDocument();
+    rerender(<TimetableGrid {...props} />);
+    expect(screen.queryByTestId("now-line")).not.toBeInTheDocument();
+  });
+
+  it("opens scrolled to now", () => {
+    const scrollSetter = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTop", { configurable: true, set: scrollSetter, get: () => 0 });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 300 });
+    render(
+      <TimetableGrid layout={layout} timeZone="Europe/London" myPicks={new Map()} friendPicks={new Map()} now={new Date("2027-07-02T21:30:00Z")} />,
+    );
+    // now is 90 min (144px) down; it sits a third (100px) of the way into a 300px box.
+    expect(scrollSetter).toHaveBeenCalledWith(44);
+    delete (HTMLElement.prototype as { scrollTop?: number }).scrollTop;
+    delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+  });
+
   it("marks plan status", () => {
     render(
       <TimetableGrid
