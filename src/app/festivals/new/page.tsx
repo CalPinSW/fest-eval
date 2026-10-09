@@ -7,6 +7,9 @@ import { clashfinderCredentialsFromEnv } from "@/lib/clashfinder/client";
 
 export const metadata: Metadata = { title: "Add a festival" };
 
+// Importing a large festival (thousands of sets) from Clashfinder runs in this page's server action.
+export const maxDuration = 300;
+
 const COMMON_ZONES = [
   "Europe/London", "Europe/Dublin", "Europe/Lisbon", "Europe/Paris", "Europe/Berlin", "Europe/Amsterdam",
   "Europe/Brussels", "Europe/Madrid", "Europe/Copenhagen", "Europe/Budapest", "America/New_York",

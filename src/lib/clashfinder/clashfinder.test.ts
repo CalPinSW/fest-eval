@@ -77,6 +77,14 @@ describe("parseClashfinderEvent", () => {
     expect(parseClashfinderEvent({ ...feed, timezone: "Nowhere/Land" }, "UTC").timezone).toBe("UTC");
   });
 
+  it("shortens over-long names instead of rejecting them", () => {
+    const event = parseClashfinderEvent({
+      locations: [{ name: "Theatre", events: [{ name: "x".repeat(500), start: "2026-06-26 10:00", end: "2026-06-26 11:00" }] }],
+    });
+    expect(event.acts[0].artistName).toHaveLength(200);
+    expect(event.rejected).toEqual([]);
+  });
+
   it("handles an empty feed", () => {
     expect(parseClashfinderEvent({})).toMatchObject({ stages: [], acts: [], rejected: [] });
   });

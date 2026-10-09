@@ -37,7 +37,15 @@ export function isSameArtist(a: string, b: string): boolean {
   return na.length > 0 && na === normalizeArtistName(b);
 }
 
-/** Tidy a user-supplied display name without changing its meaning. */
+/** Matches the artists.name length check in the database. */
+export const MAX_ARTIST_NAME_LENGTH = 200;
+
+/**
+ * Tidy a display name without changing its meaning. Over-long names (feeds
+ * sometimes put a whole description in the name) are cut with an ellipsis.
+ */
 export function cleanDisplayName(name: string): string {
-  return name.replace(/\s+/g, " ").trim();
+  const clean = name.replace(/\s+/g, " ").trim();
+  if (clean.length <= MAX_ARTIST_NAME_LENGTH) return clean;
+  return `${clean.slice(0, MAX_ARTIST_NAME_LENGTH - 1).trimEnd()}…`;
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cleanDisplayName } from "@/lib/domain/artist-name";
 import { isValidTimeZone, localDateTimeToInstant } from "@/lib/domain/time";
 
 /**
@@ -79,7 +80,7 @@ export function parseClashfinderEvent(json: unknown, fallbackTimeZone = "Europe/
     if (!stages.includes(stageName)) stages.push(stageName);
 
     for (const entry of location.events ?? []) {
-      const artistName = entry.name?.replace(/\s+/g, " ").trim();
+      const artistName = entry.name ? cleanDisplayName(entry.name) : "";
       const label = artistName || entry.short || "(unnamed)";
       if (!artistName) {
         rejected.push({ entry: label, reason: "missing name" });
